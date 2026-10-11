@@ -20,16 +20,34 @@ namespace SwagLabs.UI.Tests
             await Expect(Page.Locator(".title")).ToHaveTextAsync("Products");
         }
 
-        [Test]
-        public async Task Login_WithLockedOutUser_ShouldShowError()
+        [TestCase("locked_out_user", "secret_sauce", "Epic sadface: Sorry, this user has been locked out.")]
+        [TestCase("standard_user", "contraseña_falsa", "Epic sadface: Username and password do not match any user in this service")]
+        [TestCase("", "secret_sauce", "Epic sadface: Username is required")]
+        public async Task Login_WithInvalidCredentials_ShouldShowDynamicError(string username, string password, string expectedError)
         {
             var loginPage = new LoginPage(Page);
             
             await loginPage.GotoAsync();
-            await loginPage.LoginAsync("locked_out_user", "secret_sauce");
+            await loginPage.LoginAsync(username, password);
 
-            // Validamos usando el elemento guardado en nuestra página
-            await Expect(loginPage.ErrorMessage).ToHaveTextAsync("Epic sadface: Sorry, this user has been locked out.");
+            // Validamos que el cartel rojo muestre exactamente el error inyectado
+            await Expect(loginPage.ErrorMessage).ToHaveTextAsync(expectedError);
+        }
+
+        [Test]
+        public async Task Login_WithBrokenNetwork_ShouldLoadWithoutImages()
+        {
+            // Secuestramos la red: antes de cargar nada, le decimos a Playwright 
+            // que intercepte y destruya cualquier petición que acabe en png, jpg o jpeg.
+            await Page.RouteAsync("**/*.{png,jpg,jpeg}", async route => await route.AbortAsync());
+            
+            var loginPage = new LoginPage(Page);
+            
+            await loginPage.GotoAsync();
+            await loginPage.LoginAsync("standard_user", "secret_sauce");
+
+            // Validamos que el sistema es resiliente y nos deja entrar aunque falten recursos
+            await Expect(Page.Locator(".title")).ToHaveTextAsync("Products");
         }
     }
 }
